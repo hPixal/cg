@@ -22,32 +22,36 @@ def baricenter(triangle):
 def cross2d(v1, v2):
     return v1[0] * v2[1] - v1[1] * v2[0];
 
+def dot(v1, v2):
+    return v1[0] * v2[0] + v1[1] * v2[1];
 
-def getBarycenttricCoordinates(triangle, point):
+
+def baricentric(triangle, point):
     A, B, C = np.array(triangle[0]), np.array(triangle[1]), np.array(triangle[2])
     P = np.array(point);
-    AB = B-A;
-    AC = C-A;
-    BC = C-B;
 
-    BP = P-B;
-    AP = P-A;
-    
-    a = np.linalg.norm(cross2d(AB,AP))/2
-    b = np.linalg.norm(cross2d(AC,AP))/2
-    c = np.linalg.norm(cross2d(BC,BP))/2
-    
-    area = a+b+c;
-    a = a/area;
-    b = b/area;
-    c = c/area;
+    PA = P-A
+    PC = P-C
+    BA = B-A
+
+
+    CA = C-A
+    AC = A-C
+    BC = B-C
+
+    kappa = 1 / (cross2d(BA,CA)*cross2d(BA,CA))
+
+    a = cross2d(PA,CA) * cross2d(BA,CA) * kappa
+    b = cross2d(BA,PA) * cross2d(BA,CA) * kappa
+    c = cross2d(BC,PC) * cross2d(BC,AC) * kappa
+
     
     return np.array([a,b,c])
     
     
-def getPointFromBarycentric(triangle, barcientric):
+def barToCart(triangle, bari_cords):
     A, B, C = np.array(triangle[0]), np.array(triangle[1]), np.array(triangle[2])
-    return A * barcientric[0] + B * barcientric[1] + C * barcientric[2]
+    return A * bari_cords[2] + B * bari_cords[0] + C * bari_cords[1]
     
 
 def onclick(event):
@@ -66,8 +70,8 @@ def refresh(point=[]):
     if(len(point) > 0): 
         ax.plot(point[0], point[1], 'ro')
         print("Point (Cartesian): ", float(point[0]), float(point[1]))
-        print("Point (Barycentric): ", getBarycenttricCoordinates(triangle, point))
-        print("Point (Cartesian): ", getPointFromBarycentric(triangle, getBarycenttricCoordinates(triangle, point)))
+        print("Point (Barycentric): ", baricentric(triangle, point))
+        print("Point (Cartesian): ", barToCart(triangle, baricentric(triangle, point)))
 
     fig.canvas.draw()
     
