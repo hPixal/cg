@@ -47,9 +47,15 @@ def baricentric(triangle, point):
 
     
     return np.array([a,b,c])
+
+def get_closest_to_border(triangle,point):
+    point = baricentric(triangle,point);
+    total_area = sum(abs(point))
+    gamma = total_area-1
+    print("Total area: ", total_area, " gamma: ",gamma)
+    return point * gamma
     
-    
-def barToCart(triangle, bari_cords):
+def baricetric_to_caretesian(triangle, bari_cords):
     A, B, C = np.array(triangle[0]), np.array(triangle[1]), np.array(triangle[2])
     return A * bari_cords[2] + B * bari_cords[0] + C * bari_cords[1]
     
@@ -68,10 +74,13 @@ def refresh(point=[]):
     ax.plot([triangle[0][0],triangle[2][0]],[triangle[0][1],triangle[2][1]],'-b')
     
     if(len(point) > 0): 
+        dot = baricetric_to_caretesian(triangle,get_closest_to_border(triangle,point))
+        ax.plot(dot[0], dot[1], 'go')
         ax.plot(point[0], point[1], 'ro')
         print("Point (Cartesian): ", float(point[0]), float(point[1]))
         print("Point (Barycentric): ", baricentric(triangle, point))
-        print("Point (Cartesian): ", barToCart(triangle, baricentric(triangle, point)))
+        print("Point nearest (Cartesian): ",dot)
+        print("Point nearest (Barycentric): ",baricentric(triangle,dot))
 
     fig.canvas.draw()
     

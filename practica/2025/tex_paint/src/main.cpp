@@ -22,9 +22,8 @@ void drawBack(); // dibuja el modelo con un shader alternativo para convertir co
 void drawAux(); // dibuja la textura en la ventana auxiliar
 void drawImGui(Window &window); // settings sub-window
 
-float radius = 6; // radio del "pincel" con el que pintamos en la textura
+float radius = 5; // radio del "pincel" con el que pintamos en la textura
 glm::vec4 color = { 0.f, 0.f, 0.f, 1.f }; // color actual con el que se pinta en la textura
-glm::vec2 p0 = { 0.f , 0.f };
 
 Texture texture; // textura (compartida por ambas ventanas)
 Image image; // imagen (para la textura, Image est� en RAM, Texture la env�a a GPU)
@@ -35,6 +34,15 @@ Model model_aux; // un quad para cubrir la ventana auxiliar y mostrar la textura
 Shader shader_main; // shader para el objeto principal (drawMain)
 Shader shader_aux; // shader para la ventana auxiliar (drawTexture)
 
+// CUSTOM VARS
+glm::vec2 p0_2d = {0.f, 0.f};
+glm::vec2 p1_2d = {0.f, 0.f};
+
+// CUSTOM FUNCTIONS
+void drawCircle(int radius,glm::vec2 point);
+void dda(glm::vec2 p_0,glm::vec2 p_1,std::string type="line");
+void blendPixel(int y, int x);
+
 // callbacks del mouse y auxiliares para los callbacks
 enum class MouseAction { None, ManipulateView, Draw };
 MouseAction mouse_action = MouseAction::None; // qu� hacer en el callback del motion si el bot�n del mouse est� apretado
@@ -42,12 +50,6 @@ void mainMouseMoveCallback(GLFWwindow* window, double xpos, double ypos);
 void mainMouseButtonCallback(GLFWwindow* window, int button, int action, int mods);
 void auxMouseMoveCallback(GLFWwindow* window, double xpos, double ypos);
 void auxMouseButtonCallback(GLFWwindow* window, int button, int action, int mods);
-void dda(glm::vec2 p0, glm::vec2 p1);
-void drawCircle(glm::vec2 p);
-glm::vec2 getPointInCircle(float r, float theta, glm::vec2 center);
-void brush_segment(glm::vec2 p0, glm::vec2 p1);
-void blendPixel(int y, int x);
-
 
 int main() {
 	
@@ -168,30 +170,20 @@ void auxMouseButtonCallback(GLFWwindow* window, int button, int action, int mods
 		
 		/// @ToDo: Parte 1: pintar un punto de radio "radius" en la imagen
 		///                 "image" que se usa como textura
-		double xpos, ypos;
-        //getting cursor position
-        glfwGetCursorPos(window, &xpos, &ypos);
 		
-
-		int  win_width, win_height; 
-		glfwGetWindowSize(window,&win_width, &win_height);
-
-		// Image info
-		auto img_width = image.GetWidth();
-		auto img_height = image.GetHeight();
+		double x,y;
+		glfwGetCursorPos(window,&x,&y);
 		
-		// S and T coordinates convertion
-		auto w_s = (float)(xpos/win_width);
-		auto w_t = 1-(float)(ypos/win_height);
-		
-		//std::cout << "windows (s,t): " << w_s << " ," << w_t << "; \n";
-		
-		// Convert into image coordinates
-		auto i_xpos = w_s*img_width;
-		auto i_ypos = w_t*img_height;
+		p0_2d = glm::vec2(x,y);
 
-		p0 = glm::vec2(i_xpos,i_ypos);
+		// Adaptar a coordenadas S y T
+		int  win_width, win_height;
+    	glfwGetWindowSize(window,&win_width, &win_height);
+		auto p0_st = glm::vec2(p0_2d.x / win_width, 1 - (p0_2d.y/win_height)); 
+		auto p0_img = glm::vec2((float)image.GetWidth()*p0_st.x,(float)image.GetHeight()*p0_st.y); 
 
+		drawCircle(radius,p0_img);
+		texture.update(image);
 	} else {
 		mouse_action = MouseAction::None;
 	}
@@ -202,124 +194,19 @@ void auxMouseMoveCallback(GLFWwindow* window, double xpos, double ypos) {
 	
 	/// @ToDo: Parte 1: pintar un segmento de ancho "2*radius" en la imagen
 	///                 "image" que se usa como textura
+	
+	p1_2d = glm::vec2(xpos,ypos);
 
-	// Windows info
-	int  win_width, win_height; 
-	glfwGetWindowSize(window,&win_width, &win_height);
-	// xpos and ypos are the cursor position inside the window.
-
-	// Image info
-	auto img_width = image.GetWidth();
-	auto img_height = image.GetHeight();
-	
-	// S and T coordinates convertion
-	auto w_s = (float)(xpos/win_width);
-	auto w_t = 1-(float)(ypos/win_height);
-	
-	//std::cout << "windows (s,t): " << w_s << " ," << w_t << "; \n";
-	
-	// Convert into image coordinates
-	auto i_xpos = w_s*img_width;
-	auto i_ypos = w_t*img_height;
-	auto p1 = glm::vec2(i_xpos,i_ypos);
-	brush_segment(p0,p1);
-	p0=p1;
+	int  win_width, win_height;
+    glfwGetWindowSize(window,&win_width, &win_height);
+	auto p1_st = glm::vec2(p1_2d.x / win_width, 1 - (p1_2d.y/win_height)); 
+	auto p0_st = glm::vec2(p0_2d.x / win_width, 1 - (p0_2d.y/win_height)); 
+	auto p0_img = glm::vec2((float)image.GetWidth()*p0_st.x,(float)image.GetHeight()*p0_st.y); 
+	auto p1_img = glm::vec2((float)image.GetWidth()*p1_st.x,(float)image.GetHeight()*p1_st.y);
+	dda(p0_img,p1_img,"stroke");
+	p0_2d = p1_2d;
 	texture.update(image);
 }
-// Algoritmo DDA para trazar una línea en la textura
-void dda(glm::vec2 p0, glm::vec2 p1)
-{
-    float dx = p1.x - p0.x;
-    float dy = p1.y - p0.y;
-
-    if (dx == 0 && dy == 0) return;
-
-    if (fabs(dx) > fabs(dy)) {
-        // caso x-dominante
-        if (p0.x > p1.x) std::swap(p0, p1);
-
-        float slope = dy / dx;
-        float y = p0.y;
-        for (int x = (int)p0.x; x <= (int)p1.x; x++) {
-            blendPixel((int)round(y),x);
-            y += slope;
-        }
-    } else {
-        // caso y-dominante
-        if (p0.y > p1.y) std::swap(p0, p1);
-
-        float slope = dx / dy;
-        float x = p0.x;
-        for (int y = (int)p0.y; y <= (int)p1.y; y++) {
-            blendPixel(y,(int)round(x));
-            x += slope;
-        }
-    }
-}
-
-void blendPixel(int y, int x) {
-        glm::vec3 current_color = image.GetRGB(y, x); 
-        float alpha = color.w;
-
-        glm::vec3 src = glm::vec3(color.x, color.y, color.z);
-        glm::vec3 dst = current_color;
-
-        glm::vec3 out = alpha * src + (1.0f - alpha) * dst;
-        image.SetRGB(y,x, out);
-    };
-
-// Pincel: dibuja un segmento "grueso" pintando círculos a lo largo de la línea
-void brush_segment(glm::vec2 p0, glm::vec2 p1)
-{
-	float dx = p1.x - p0.x;
-	float dy = p1.y - p0.y;
-	
-	if (dx == 0 && dy == 0) return; // un solo punto
-	
-	if (fabs(dx) > fabs(dy)) {
-		// caso x-dominante
-		if (p0.x > p1.x) std::swap(p0, p1);
-		
-		float slope = dy / dx;
-		float y = p0.y;
-		for (int x = (int)p0.x; x <= (int)p1.x; x++) {
-			drawCircle(glm::vec2(x, (int)round(y)));
-			y += slope;
-		}
-	} else {
-		// caso y-dominante
-		if (p0.y > p1.y) std::swap(p0, p1);
-		
-		float slope = dx / dy;
-		float x = p0.x;
-		for (int y = (int)p0.y; y <= (int)p1.y; y++) {
-			drawCircle(glm::vec2((int)round(x), y)); 
-			x += slope;
-		}
-	}
-}
-
-void drawCircle(glm::vec2 p) {
-    const double pi = 3.14159265359;
-
-    for (int r = 0; r < radius; r++) {
-        int samples = 2 * r + 1; 
-        double d_theta = 2 * pi / samples;
-
-        double theta = 0;
-        while (theta < 2 * pi) {
-            glm::vec2 p_0 = getPointInCircle(r, theta, p);
-            glm::vec2 p_1 = getPointInCircle(r, theta + d_theta, p); 
-            dda(p_0, p_1);
-            theta += d_theta;  // avanzar!
-        }
-    }
-}
-
-glm::vec2 getPointInCircle(float r, float theta, glm::vec2 center) {
-    return glm::vec2(center.x + r * cos(theta), center.y + r * sin(theta));
-}
-
 
 
 // ===== callbacks de la ventana principal (vista 3D) =====
@@ -356,3 +243,70 @@ void mainMouseMoveCallback(GLFWwindow* window, double xpos, double ypos) {
 	///                 "image" que se usa como textura
 	
 }
+
+
+void dda(glm::vec2 p_0,glm::vec2 p_1,std::string type)
+{
+    float dx = p_1.x - p_0.x;
+    float dy = p_1.y - p_0.y;
+
+    if (dx == 0 && dy == 0) return;
+
+    if (fabs(dx) > fabs(dy)) {
+        // caso x-dominante
+        if (p_0.x > p_1.x) std::swap(p_0, p_1);
+
+        float slope = dy / dx;
+        float y = p_0.y;
+        for (int x = (int)p_0.x; x <= (int)p_1.x; x++) {
+			if(type == "line") blendPixel((int)round(y), x);
+			if(type == "stroke") drawCircle(2*radius,glm::vec2(x,(int)round(y)));	
+            y += slope;
+        }
+    } else {
+        // caso y-dominante
+        if (p_0.y > p_1.y) std::swap(p_0, p_1);
+
+        float slope = dx / dy;
+        float x = p_0.x;
+        for (int y = (int)p_0.y; y <= (int)p_1.y; y++) {
+			if(type == "line") blendPixel(y, (int)round(x));
+			if(type == "stroke") drawCircle(2*radius,glm::vec2((int)round(x),y));	
+            x += slope;
+        }
+    }
+}
+
+void drawCircle(int radius,glm::vec2 point)
+{
+	auto cx = point.x; auto cy = point.y; 
+	int x = 0, y = radius;
+    int d = 1 - radius;
+
+    while (x <= y) {
+        dda(glm::vec2(cx - x, cy + y),glm::vec2(cx + x, cy + y));
+        dda(glm::vec2(cx - x, cy - y),glm::vec2(cx + x, cy - y));
+        dda(glm::vec2(cx - y, cy + x),glm::vec2(cx + y, cy + x));
+        dda(glm::vec2(cx - y, cy - x),glm::vec2(cx + y, cy - x));
+
+        if (d < 0) {
+            d += 2 * x + 3;
+        } else {
+            d += 2 * (x - y) + 5;
+            y--;
+        }
+        x++;
+    }
+}
+
+void blendPixel(int y, int x) {
+        glm::vec3 current_color = image.GetRGB(y, x); 
+        float alpha = color.w;
+
+        glm::vec3 src = glm::vec3(color.x, color.y, color.z);
+        glm::vec3 dst = current_color;
+
+        glm::vec3 out = alpha * src + (1.0f - alpha) * dst;
+        image.SetRGB(y,x, out);
+    };
+
