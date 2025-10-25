@@ -260,7 +260,7 @@ void dda(glm::vec2 p_0,glm::vec2 p_1,std::string type)
         float y = p_0.y;
         for (int x = (int)p_0.x; x <= (int)p_1.x; x++) {
 			if(type == "line") blendPixel((int)round(y), x);
-			if(type == "stroke") drawCircle(2*radius,glm::vec2(x,(int)round(y)));	
+			if(type == "stroke" && x % (int)(radius/2) == 0) drawCircle(2*radius,glm::vec2(x,(int)round(y)));	
             y += slope;
         }
     } else {
@@ -271,32 +271,37 @@ void dda(glm::vec2 p_0,glm::vec2 p_1,std::string type)
         float x = p_0.x;
         for (int y = (int)p_0.y; y <= (int)p_1.y; y++) {
 			if(type == "line") blendPixel(y, (int)round(x));
-			if(type == "stroke") drawCircle(2*radius,glm::vec2((int)round(x),y));	
+			if(type == "stroke" && y % (int)(radius/2) == 0) drawCircle(2*radius,glm::vec2((int)round(x),y));	
             x += slope;
         }
     }
 }
 
-void drawCircle(int radius,glm::vec2 point)
+
+
+void drawCircle(int r,glm::vec2 cp)
 {
-	auto cx = point.x; auto cy = point.y; 
-	int x = 0, y = radius;
-    int d = 1 - radius;
+	// Bounding box
+	auto min_x = cp.x-r;
+	auto max_x = cp.x+r;
+	auto min_y = cp.y-r;
+	auto max_y = cp.y+r;
 
-    while (x <= y) {
-        dda(glm::vec2(cx - x, cy + y),glm::vec2(cx + x, cy + y));
-        dda(glm::vec2(cx - x, cy - y),glm::vec2(cx + x, cy - y));
-        dda(glm::vec2(cx - y, cy + x),glm::vec2(cx + y, cy + x));
-        dda(glm::vec2(cx - y, cy - x),glm::vec2(cx + y, cy - x));
+	for (auto x = min_x; x < max_x; x++)
+	{
+		bool inside_flag = false;
+		for (auto y = min_y; y < max_y; y++)
+		{
+			auto p = glm::vec2(x,y);
+			auto v = cp-p;
+			if (glm::pow(r,2) >= (glm::pow(v.x,2)+ glm::pow(v.y,2)))
+			{
+				blendPixel(p.y,p.x);
+			}
+		}
+	}
+	
 
-        if (d < 0) {
-            d += 2 * x + 3;
-        } else {
-            d += 2 * (x - y) + 5;
-            y--;
-        }
-        x++;
-    }
 }
 
 void blendPixel(int y, int x) {
