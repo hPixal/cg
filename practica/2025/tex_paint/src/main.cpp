@@ -2,6 +2,7 @@
 #include <stdexcept>
 #include <vector>
 #include <string>
+#include <map>
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
@@ -34,14 +35,36 @@ Model model_aux; // un quad para cubrir la ventana auxiliar y mostrar la textura
 Shader shader_main; // shader para el objeto principal (drawMain)
 Shader shader_aux; // shader para la ventana auxiliar (drawTexture)
 
+
+
 // CUSTOM VARS
 glm::vec2 p0_2d = {0.f, 0.f};
 glm::vec2 p1_2d = {0.f, 0.f};
+std::map<glm::vec3,glm::vec2> colorToImage;
+std::map<glm::vec2,glm::vec3> imageToColor;
+Image image_colormap;
 
 // CUSTOM FUNCTIONS
 void drawCircle(int radius,glm::vec2 point);
 void dda(glm::vec2 p_0,glm::vec2 p_1,std::string type="line");
 void blendPixel(int y, int x);
+void makeColorMap();
+
+// Comparadores para usar glm::vec como clave en std::map
+namespace glm {
+    inline bool operator<(const glm::vec2& a, const glm::vec2& b) {
+        if (a.x != b.x) return a.x < b.x;
+        return a.y < b.y;
+    }
+
+    inline bool operator<(const glm::vec3& a, const glm::vec3& b) {
+        if (a.x != b.x) return a.x < b.x;
+        if (a.y != b.y) return a.y < b.y;
+        return a.z < b.z;
+    }
+}
+
+
 
 // callbacks del mouse y auxiliares para los callbacks
 enum class MouseAction { None, ManipulateView, Draw };
@@ -224,7 +247,29 @@ void mainMouseButtonCallback(GLFWwindow* window, int button, int action, int mod
 		
 		/// @ToDo: Parte 2: pintar un punto de radio "radius" en la imagen
 		///                 "image" que se usa como textura
-		
+
+		// Get Cursor pos
+		double x,y;
+		glfwGetCursorPos(window,&x,&y);
+
+		// Get cursor z buffer value
+		glReadBuffer(GL_DEPTH);
+		float depth_value;
+		glReadPixels(x,y,1,1, GL_DEPTH_COMPONENT, GL_FLOAT, &depth_value);
+
+		if(depth_value < 1)
+		{
+			makeColorMap();
+
+			// Get cursor color
+			glReadBuffer(GL_BACK);
+			glm::vec4 color_rgba;
+			glReadPixels(x,y,1,1, GL_RGBA, GL_FLOAT, &(color_rgba[0]));
+
+			glm::vec3 color_rgb = glm::vec3(color_rgba.x,color_rgba.y,color_rgba.z);
+			auto p_img = colorToImage[color_rgb];
+			drawCircle(radius,p_img);
+		}
 	} else {
 		if (mouse_action==MouseAction::ManipulateView)
 			common_callbacks::mouseButtonCallback(window, GLFW_MOUSE_BUTTON_LEFT, action, mods);
@@ -243,7 +288,6 @@ void mainMouseMoveCallback(GLFWwindow* window, double xpos, double ypos) {
 	///                 "image" que se usa como textura
 	
 }
-
 
 void dda(glm::vec2 p_0,glm::vec2 p_1,std::string type)
 {
@@ -277,8 +321,6 @@ void dda(glm::vec2 p_0,glm::vec2 p_1,std::string type)
     }
 }
 
-
-
 void drawCircle(int r,glm::vec2 cp)
 {
 	// Bounding box
@@ -300,8 +342,38 @@ void drawCircle(int r,glm::vec2 cp)
 			}
 		}
 	}
-	
+}
 
+void getColorCoordinates(GLFWwindow* window_2d,glm::vec2 p)
+{
+	int  win_width, win_height;
+    glfwGetWindowSize(window_2d,&win_width, &win_height);
+	auto p_st = glm::vec2(p.x / win_width, 1 - (p.y/win_height)); 
+	auto p_img = glm::vec2((float)image.GetWidth()*p_st.x,(float)image.GetHeight()*p_st.y);
+
+
+}
+
+void makeColorMap()
+{
+	image_colormap = Image("models/chookity.png",true);
+	for (int i = 0; i < image.GetHeight(); i++)
+	{
+		for (int j = 0; j < image.GetWidth() ; j++)
+		{
+			// Random non-repeating color generator
+			auto newColor = glm::vec3(rand() % 255,rand() % 255,rand() % 255);
+			while(colorToImage.find(newColor) != colorToImage.end())
+			{ newColor = glm::vec3(rand() % 255,rand() % 255,rand() % 255); }
+
+			// Set Color mapping
+			auto pos = glm::vec2((float)i,(float)j);
+			colorToImage[newColor] = pos;
+			imageToColor[pos] = newColor;
+
+			image_colormap.SetRGB(i,j,newColor);
+		}
+	}
 }
 
 void blendPixel(int y, int x) {
