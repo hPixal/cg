@@ -43,6 +43,7 @@ glm::vec2 p1_2d = {0.f, 0.f};
 std::map<glm::vec3,glm::vec2> colorToImage;
 std::map<glm::vec2,glm::vec3> imageToColor;
 Image image_colormap;
+Shader shader_flat; // shader plano
 
 // CUSTOM FUNCTIONS
 void drawCircle(int radius,glm::vec2 point);
@@ -84,6 +85,7 @@ int main() {
 	
 	glClearColor(1.f,1.f,1.f,1.f);
 	shader_main = Shader("shaders/main");
+	shader_flat = Shader("shaders/flat");
 	
 	image = Image("models/chookity.png",true);
 	
@@ -102,6 +104,7 @@ int main() {
 	
 	model_aux = Model::loadSingle("models/texquad", Model::fNoTextures);
 	shader_aux = Shader("shaders/quad");
+	
 	
 	// main loop
 	do {
@@ -147,18 +150,30 @@ void drawAux() {
 	model_aux.buffers.draw();
 }
 
+
 void drawBack() {
 	glfwMakeContextCurrent(main_window);
-	glDisable(GL_MULTISAMPLE);
+    // glDisable(GL_MULTISAMPLE);
 
 	/// @ToDo: Parte 2: renderizar el modelo en 3d con un nuevo shader de forma 
 	///                 que queden las coordenadas de textura de cada fragmento
 	///                 en el back-buffer de color
+
+	glEnable(GL_DEPTH_TEST);
+	glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
 	
-	glEnable(GL_MULTISAMPLE);
+	texture.bind();
+	shader_flat.use();
+	setMatrixes(main_window, shader_flat);
+	shader_flat.setLight(glm::vec4{-1.f,1.f,4.f,1.f}, glm::vec3{1.f,1.f,1.f}, 0.35f);
+	shader_flat.setMaterial(model_chookity.material);
+	shader_flat.setBuffers(model_chookity.buffers);
+	model_chookity.buffers.draw();
+
 	glFlush();
-	glFinish();
+    glFinish();
 }
+
 
 void drawImGui(Window &window) {
 	if (!glfwGetWindowAttrib(window, GLFW_FOCUSED)) return;
@@ -250,6 +265,9 @@ void mainMouseButtonCallback(GLFWwindow* window, int button, int action, int mod
 
 		if (button==GLFW_MOUSE_BUTTON_LEFT) {
 			mouse_action = MouseAction::Draw;
+			
+			// Ponemos el mapa de colores
+			texture.update(image_colormap);
 
 			drawBack();
 			glFinish();
@@ -274,9 +292,22 @@ void mainMouseButtonCallback(GLFWwindow* window, int button, int action, int mod
 			
 			if(zbf < 1.f) // Si no es el Z_FAR
 			{	
-				std::cout<<"puto el que lee" << std::endl;
+				std::cout << "zbf function triggered" << std::endl;
 				
-				texture.update(image_colormap);
+				// Leemos el color del pixel
+				glReadBuffer(GL_BACK);
+				glm::vec3 color_value;
+				glReadPixels(px,py,1,1,GL_RGB,GL_FLOAT,&(color_value[0]));
+				
+				std::cout 	<< "READ COLOR: " 
+							<< (int)(color_value.x * 255.f) << ", " 
+							<< (int)(color_value.y * 255.f) << ", " 
+							<< (int)(color_value.x * 255.f) << std::endl;
+
+				auto p0_tex = colorToImage[color_value];
+				drawCircle(radius,p0_tex);
+
+				texture.update(image);
 			}
 		}
 		
@@ -371,25 +402,46 @@ void getColorCoordinates(GLFWwindow* window_2d,glm::vec2 p)
 
 }
 
-void makeColorMap()
-{
-	for (int i = 0; i < image.GetHeight(); i++)
-	{
-		for (int j = 0; j < image.GetWidth() ; j++)
-		{
-			// Random non-repeating color generator
-			auto newColor = glm::vec3(rand() % 255,rand() % 255,rand() % 255);
-			while(colorToImage.find(newColor) != colorToImage.end())
-			{ newColor = glm::vec3(rand() % 255,rand() % 255,rand() % 255); }
+void makeColorMap() {
+    colorToImage.clear();
+    imageToColor.clear();
 
-			// Set Color mapping
-			auto pos = glm::vec2((float)i,(float)j);
-			colorToImage[newColor] = pos;
-			imageToColor[pos] = newColor;
+    int width = image.GetWidth();
+    int height = image.GetHeight();
 
-			image_colormap.SetRGB(i,j,newColor);
-		}
-	}
+    unsigned int r = 0, g = 0, b = 0;
+
+    for (int y = 0; y < height; ++y) {
+        for (int x = 0; x < width; ++x) {
+            // crear color actual
+            glm::vec3 color_rgb = glm::vec3(
+                r / 255.0f,
+                g / 255.0f,
+                b / 255.0f
+            );
+
+            glm::vec2 pos = glm::vec2((float)x,(float)(height - y));
+
+            colorToImage[color_rgb] = pos;
+            imageToColor[pos] = color_rgb;
+
+
+            image_colormap.SetRGB(y, x, color_rgb);
+			// image_colormap.SetRGB(y, x, glm::vec3(0,0,0));
+
+            // avanzar el “contador” de color
+            b++;
+            if (b >= 256) {
+                b = 0;
+                g++;
+                if (g >= 256) {
+                    g = 0;
+                    r++;
+                    if (r >= 256) r = 0;
+                }
+            }
+        }
+    }
 }
 
 void blendPixel(int y, int x) {
