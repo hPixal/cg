@@ -451,31 +451,44 @@ void makeColorMap() {
 			// image_colormap.SetRGB(y, x, glm::vec3(0,0,0));
 
             // avanzar el “contador” de color
-            b+=2;
+            b+=1;
             if (b >= 256) {
                 b = 0;
-                g+=2;
+                g+=1;
                 if (g >= 256) {
                     g = 0;
-                    r+=2;
+                    r+=1;
                     if (r >= 256) r = 0;
-                }
-            }
+				}
+			}
+//			b = 30;
+//			g = 30;
+//			r = 30;
         }
     }
 	std::cout << "color: " << r << ", " << g << ", " << b << std::endl;
 }
 
 void blendPixel(int y, int x) {
+	
+	auto img_width = image.GetWidth();
+	auto img_height = image.GetHeight();
+	
+	if (x < img_width and y < img_height and x > 0 and y > 0){ // para no pintar fuera de la imagen
+		
         glm::vec3 current_color = image.GetRGB(y, x); 
         float alpha = color.w;
 
         glm::vec3 src = glm::vec3(color.x, color.y, color.z);
         glm::vec3 dst = current_color;
-
+		
+		alpha = alpha*2/radius; // para que el alpha en radios grandes ande 
+		
         glm::vec3 out = alpha * src + (1.0f - alpha) * dst;
         image.SetRGB(y,x, out);
-    };
+		
+	}
+};
 
 
 void printColorToImage() {
