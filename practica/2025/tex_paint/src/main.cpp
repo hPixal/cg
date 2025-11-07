@@ -322,8 +322,10 @@ void mainMouseButtonCallback(GLFWwindow* window, int button, int action, int mod
 
 				std::cout << "READ COLOR (packed idx): " << idx << " -> POS: "
 						  << px_tex << ", " << py_tex << std::endl;
-
+				
+				
 				drawCircle(radius, p0_tex);
+				
 				p0_2d = p0_tex;
 				texture.update(image);
 			}
@@ -420,7 +422,7 @@ void dda(glm::vec2 p_0,glm::vec2 p_1,std::string type)
         float y = p_0.y;
         for (int x = (int)p_0.x; x <= (int)p_1.x; x++) {
 			if(type == "line") blendPixel((int)round(y), x);
-			if(type == "stroke" && x % (int)(radius/2) == 0) drawCircle(2*radius,glm::vec2(x,(int)round(y)));	
+			if(type == "stroke" /* && x % (int)(radius/2) == 0 */) drawCircle(radius,glm::vec2(x,(int)round(y)));	
             y += slope;
         }
     } else {
@@ -431,7 +433,7 @@ void dda(glm::vec2 p_0,glm::vec2 p_1,std::string type)
         float x = p_0.x;
         for (int y = (int)p_0.y; y <= (int)p_1.y; y++) {
 			if(type == "line") blendPixel(y, (int)round(x));
-			if(type == "stroke" && y % (int)(radius/2) == 0) drawCircle(2*radius,glm::vec2((int)round(x),y));	
+			if(type == "stroke"  /* && y % (int)(radius/2) == 0 */ ) drawCircle(radius,glm::vec2((int)round(x),y));	
             x += slope;
         }
     }
@@ -458,6 +460,16 @@ void drawCircle(int r,glm::vec2 cp)
 			}
 		}
 	}
+	// Para radios pequeños:
+	for (int x = min_x; x <= max_x; ++x) {
+		for (int y = min_y; y <= max_y; ++y) {
+			glm::vec2 p((float)x, (float)y);
+			glm::vec2 v = cp - p;
+			if ((v.x * v.x + v.y * v.y) <= (float)r * (float)r) {
+				blendPixel(y, x);
+			}
+    }
+}
 }
 
 void getColorCoordinates(GLFWwindow* window_2d,glm::vec2 p)
@@ -528,7 +540,11 @@ void blendPixel(int y, int x) {
         glm::vec3 src = glm::vec3(color.x, color.y, color.z);
         glm::vec3 dst = current_color;
 		
-		alpha = alpha/(radius/5); // para que el alpha en radios grandes ande 
+		//alpha = alpha/(radius/5); // para que el alpha en radios grandes ande 
+		
+		// pero evitar alpha > 1
+    	//float scaled = alpha / (radius / 5.0f);
+    	//alpha = std::min(1.0f, scaled);
 		
         glm::vec3 out = alpha * src + (1.0f - alpha) * dst;
         image.SetRGB(y,x, out);
