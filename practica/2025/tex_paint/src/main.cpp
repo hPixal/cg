@@ -69,7 +69,7 @@ namespace glm {
 
 
 
-// callbacks del mouse y auxiliares para los callbacks
+// callbacks del mouse y auxiliares para los callbacks 
 enum class MouseAction { None, ManipulateView, Draw };
 MouseAction mouse_action = MouseAction::None; // qu� hacer en el callback del motion si el bot�n del mouse est� apretado
 void mainMouseMoveCallback(GLFWwindow* window, double xpos, double ypos);
@@ -275,7 +275,7 @@ void mainMouseButtonCallback(GLFWwindow* window, int button, int action, int mod
 			mouse_action = MouseAction::Draw;
 			
 			// Ponemos el mapa de colores
-			texture.update(image_colormap);
+			//texture.update(image_colormap);
 
 			drawBack();
 			glFinish();
@@ -322,8 +322,11 @@ void mainMouseButtonCallback(GLFWwindow* window, int button, int action, int mod
 
 				std::cout << "READ COLOR (packed idx): " << idx << " -> POS: "
 						  << px_tex << ", " << py_tex << std::endl;
-
+				
+				
 				drawCircle(radius, p0_tex);
+				
+				p0_2d = p0_tex;
 				texture.update(image);
 			}
 		}
@@ -349,9 +352,59 @@ void mainMouseMoveCallback(GLFWwindow* window, double xpos, double ypos) {
 	/// @ToDo: Parte 2: pintar un segmento de ancho "2*radius" en la imagen
 	///                 "image" que se usa como textura
 	
-
-
-
+	
+	drawBack();
+	glFinish();
+	
+	int  wwidth, wheight;
+	glfwGetWindowSize(window,&wwidth, &wheight);
+	
+	int px = (int)(xpos);
+	int py = (int)(wheight-ypos);
+	
+	p1_2d = glm::vec2(px,py);
+	
+	//p0_2d = glm::vec2(px,py);
+	
+	float zbf ;
+	glReadBuffer(GL_DEPTH);
+	glReadPixels(px,py,1,1,GL_DEPTH_COMPONENT,GL_FLOAT,&zbf);
+	
+	if(zbf < 1.f) // Si no es el Z_FAR
+	{	
+		std::cout << "zbf function triggered" << std::endl;
+		
+		// Leemos el color del pixel
+		glReadBuffer(GL_BACK);
+		unsigned char color_value[3];
+		glReadPixels(px, py, 1, 1, GL_RGB, GL_UNSIGNED_BYTE, color_value);
+		
+		// Decode the packed 24-bit index from the read-back RGB
+		int r = (int)color_value[0];
+		int g = (int)color_value[1];
+		int b = (int)color_value[2];
+		
+		int idx = (r << 16) | (g << 8) | b;
+		int texW = image.GetWidth();
+		int texH = image.GetHeight();
+		int px_tex = idx % texW;
+		int py_tex = idx / texW;
+		
+		glm::vec2 p1_tex = glm::vec2((float)px_tex, (float)py_tex);
+	
+	///p1_2d = glm::vec2(xpos,ypos);
+	/*
+	int  win_width, win_height;
+	glfwGetWindowSize(window,&win_width, &win_height);
+	auto p1_st = glm::vec2(p1_2d.x / win_width, 1 - (p1_2d.y/win_height)); 
+	auto p0_st = glm::vec2(p0_2d.x / win_width, 1 - (p0_2d.y/win_height)); 
+	auto p0_img = glm::vec2((float)image.GetWidth()*p0_st.x,(float)image.GetHeight()*p0_st.y); 
+	auto p1_img = glm::vec2((float)image.GetWidth()*p1_st.x,(float)image.GetHeight()*p1_st.y);
+	*/
+	dda(p0_2d,p1_tex,"stroke"); // implemento DDA en 3d
+	p0_2d = p1_tex;
+	texture.update(image);
+	}
 }
 
 void dda(glm::vec2 p_0,glm::vec2 p_1,std::string type)
@@ -369,7 +422,7 @@ void dda(glm::vec2 p_0,glm::vec2 p_1,std::string type)
         float y = p_0.y;
         for (int x = (int)p_0.x; x <= (int)p_1.x; x++) {
 			if(type == "line") blendPixel((int)round(y), x);
-			if(type == "stroke" && x % (int)(radius/2) == 0) drawCircle(2*radius,glm::vec2(x,(int)round(y)));	
+			if(type == "stroke" /* && x % (int)(radius/2) == 0 */) drawCircle(radius,glm::vec2(x,(int)round(y)));	
             y += slope;
         }
     } else {
@@ -380,7 +433,7 @@ void dda(glm::vec2 p_0,glm::vec2 p_1,std::string type)
         float x = p_0.x;
         for (int y = (int)p_0.y; y <= (int)p_1.y; y++) {
 			if(type == "line") blendPixel(y, (int)round(x));
-			if(type == "stroke" && y % (int)(radius/2) == 0) drawCircle(2*radius,glm::vec2((int)round(x),y));	
+			if(type == "stroke"  /* && y % (int)(radius/2) == 0 */ ) drawCircle(radius,glm::vec2((int)round(x),y));	
             x += slope;
         }
     }
@@ -407,6 +460,16 @@ void drawCircle(int r,glm::vec2 cp)
 			}
 		}
 	}
+	// Para radios pequeños:
+	for (int x = min_x; x <= max_x; ++x) {
+		for (int y = min_y; y <= max_y; ++y) {
+			glm::vec2 p((float)x, (float)y);
+			glm::vec2 v = cp - p;
+			if ((v.x * v.x + v.y * v.y) <= (float)r * (float)r) {
+				blendPixel(y, x);
+			}
+    }
+}
 }
 
 void getColorCoordinates(GLFWwindow* window_2d,glm::vec2 p)
@@ -459,9 +522,6 @@ void makeColorMap() {
                     if (r >= 256) r = 0;
 				}
 			}
-//			b = 30;
-//			g = 30;
-//			r = 30;
         }
     }
 	std::cout << "color: " << r << ", " << g << ", " << b << std::endl;
@@ -480,7 +540,11 @@ void blendPixel(int y, int x) {
         glm::vec3 src = glm::vec3(color.x, color.y, color.z);
         glm::vec3 dst = current_color;
 		
-		alpha = alpha/(radius/5); // para que el alpha en radios grandes ande 
+		//alpha = alpha/(radius/5); // para que el alpha en radios grandes ande 
+		
+		// pero evitar alpha > 1
+    	//float scaled = alpha / (radius / 5.0f);
+    	//alpha = std::min(1.0f, scaled);
 		
         glm::vec3 out = alpha * src + (1.0f - alpha) * dst;
         image.SetRGB(y,x, out);
